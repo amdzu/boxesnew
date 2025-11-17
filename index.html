@@ -514,6 +514,7 @@
 
         document.querySelectorAll('#topContainer .draggable-shape').forEach(sq => sq.classList.remove('selected'));
         element.classList.add('selected');
+        clearSlotHighlights();
       });
 
       if (MULTI_SLOT_SHAPES.has(element.dataset.shape || 'square')) {
@@ -631,6 +632,19 @@
           '';
         const span = MULTI_SLOT_SHAPES.has(shapeType) ? SENTENCE_SLOT_SPAN : 1;
         highlightSlotsFrom(slotIndex, span);
+      });
+
+      slot.addEventListener('mouseenter', () => {
+        if (!selectedElement) return;
+        const slotIndex = parseInt(slot.dataset.index, 10);
+        const shapeType = selectedElement.type || '';
+        const span = MULTI_SLOT_SHAPES.has(shapeType) ? SENTENCE_SLOT_SPAN : 1;
+        highlightSlotsFrom(slotIndex, span);
+      });
+
+      slot.addEventListener('mouseleave', () => {
+        if (!selectedElement) return;
+        clearSlotHighlights();
       });
 
 
@@ -1229,6 +1243,7 @@ function clearSelection() {
   selectedElement = null;
   document.querySelectorAll('.draggable-shape.selected, .circle.selected')
     .forEach(el => el.classList.remove('selected'));
+  clearSlotHighlights();
 }
 
 
