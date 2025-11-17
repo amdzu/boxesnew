@@ -233,6 +233,10 @@
       transform: translateY(35px);
     }
 
+    .slot.highlighted {
+      border: 2px dashed lightgrey;
+    }
+
 
 
     .dropped-shape {
@@ -402,6 +406,7 @@
 
 
     let editMode = false;
+    let currentDragShape = null;
     const dropZone = document.getElementById('dropZone');
     const topContainer = document.getElementById('topContainer');
     const dropSound = document.getElementById('dropSound');
@@ -446,6 +451,7 @@
     const dropZoneWidth = dropZone.clientWidth || 1200;
     const SLOT_COUNT = Math.max(SENTENCE_SLOT_SPAN, Math.floor(dropZoneWidth / (BASE_TILE_SIZE + SLOT_GAP)));
     const slots = [];
+    let highlightedSlotEls = [];
 
     function getMarkSymbol(shape) {
       return MARK_SYMBOLS[shape] || '';
@@ -474,6 +480,25 @@
 
     function resolveTileColor(key) {
       return TILE_COLORS[key] || key || '#777';
+    }
+
+    function clearSlotHighlights() {
+      if (!highlightedSlotEls.length) return;
+      highlightedSlotEls.forEach(slotEl => {
+        if (slotEl) slotEl.classList.remove('highlighted');
+      });
+      highlightedSlotEls = [];
+    }
+
+    function highlightSlotsFrom(startIndex, span) {
+      clearSlotHighlights();
+      if (Number.isNaN(startIndex)) return;
+      for (let i = 0; i < span; i++) {
+        const slotEl = slots[startIndex + i];
+        if (!slotEl) break;
+        slotEl.classList.add('highlighted');
+        highlightedSlotEls.push(slotEl);
+      }
     }
 
     function registerDraggableShape(element) {
@@ -511,6 +536,7 @@
       element.addEventListener('dragstart', (e) => {
         const shapeType = element.dataset.shape || 'square';
         const text = element.dataset.text || element.textContent || '';
+        currentDragShape = { shape: shapeType };
         applyDragPreview(element, e);
         e.dataTransfer.setData('color', element.dataset.color || '');
         e.dataTransfer.setData('text', text);
@@ -589,7 +615,23 @@
       slot.classList.add('slot');
       slot.dataset.index = i;
 
-      slot.addEventListener('dragover', (e) => e.preventDefault());
+      slot.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const isCircleDrag =
+          e.dataTransfer.getData('circle') ||
+          (currentDragShape && currentDragShape.shape === 'circle');
+        if (isCircleDrag) {
+          clearSlotHighlights();
+          return;
+        }
+        const slotIndex = parseInt(slot.dataset.index, 10);
+        const shapeType =
+          (currentDragShape && currentDragShape.shape) ||
+          e.dataTransfer.getData('shape') ||
+          '';
+        const span = MULTI_SLOT_SHAPES.has(shapeType) ? SENTENCE_SLOT_SPAN : 1;
+        highlightSlotsFrom(slotIndex, span);
+      });
 
 
 
@@ -598,13 +640,21 @@ slot.addEventListener('drop', (e) => {
   e.preventDefault();
 
   // If dragging a circle, don't process as a square drop
-  if (e.dataTransfer.getData('circle')) {
+  const isCircleDrag =
+    e.dataTransfer.getData('circle') ||
+    (currentDragShape && currentDragShape.shape === 'circle');
+  if (isCircleDrag) {
+    clearSlotHighlights();
+    currentDragShape = null;
     return;
   }
 
   const color = e.dataTransfer.getData('color') || e.dataTransfer.getData('move-color');
   const text = e.dataTransfer.getData('text') || '';
-  const shapeType = e.dataTransfer.getData('shape') || 'square';
+  const shapeType =
+    (currentDragShape && currentDragShape.shape) ||
+    e.dataTransfer.getData('shape') ||
+    'square';
   const sourceSlot = e.dataTransfer.getData('source-slot');
 
   if (sourceSlot !== '') {
@@ -619,6 +669,9 @@ slot.addEventListener('drop', (e) => {
   if (placeTileAtIndex(slotIndex, shapeType, color, text)) {
     dropSound.play();
   }
+
+  clearSlotHighlights();
+  currentDragShape = null;
 });
 
 
@@ -710,6 +763,8 @@ slot.addEventListener('click', () => {
 
 
 document.body.addEventListener('drop', (e) => {
+  clearSlotHighlights();
+  currentDragShape = null;
   const isCircle = e.dataTransfer.getData('circle');
   const circleId = e.dataTransfer.getData('circle-id');
 
@@ -746,36 +801,11 @@ if (isCircle && circleId) {
 
 
 
-// Add border when dragging over a slot
-dropZone.querySelectorAll('.slot').forEach(slot => {
-  slot.addEventListener('dragover', (e) => {
-    e.preventDefault(); // Allow drop
-    slot.style.border = '2px dashed lightgrey'; // Show the border when dragging over
-  });
-
-  // Remove border when dragging leaves the slot
-  slot.addEventListener('dragleave', () => {
-    slot.style.border = ''; // Remove the border when leaving the slot
-  });
-
-  // Ensure the border is removed after dropping
-  slot.addEventListener('drop', () => {
-    slot.style.border = ''; // Remove the border after drop
-  });
+// Keep slot highlights tidy when dragging ends outside the drop zone
+document.addEventListener('dragend', () => {
+  clearSlotHighlights();
+  currentDragShape = null;
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -876,6 +906,7 @@ dropZone.querySelectorAll('.slot').forEach(slot => {
       tile.addEventListener('dblclick', () => removeTile(tile));
 
       tile.addEventListener('dragstart', (ev) => {
+        currentDragShape = { shape: normalizedShape };
         applyDragPreview(tile, ev);
         const draggedText = tile.textContent;
         ev.dataTransfer.setData('move-color', tile.dataset.color);
@@ -1171,6 +1202,7 @@ document.querySelectorAll('.circle').forEach(circle => {
   circle.addEventListener('dragstart', (e) => {
     const id = circle.dataset.id || Math.random().toString(36).substr(2, 9);
     circle.dataset.id = id;
+    currentDragShape = { shape: 'circle' };
     e.dataTransfer.setData('circle', 'true');
     e.dataTransfer.setData('circle-id', id);
   });
@@ -1232,6 +1264,7 @@ dropZone.addEventListener('drop', (e) => {
     clone.style.position = 'absolute';
 
     clone.addEventListener('dragstart', (e) => {
+      currentDragShape = { shape: 'circle' };
       e.dataTransfer.setData('circle', 'true');
       e.dataTransfer.setData('circle-id', clone.dataset.id);
     });
@@ -1246,6 +1279,7 @@ dropZone.addEventListener('drop', (e) => {
         : parseInt(targetShape.parentElement.dataset.index, 10);
     attachCircleToSlot(targetShape, clone, slotIndex);
     updateCirclePositions(targetShape);
+    currentDragShape = null;
   }
 });
 
@@ -1273,6 +1307,7 @@ dropZone.addEventListener('drop', (e) => {
     clone.style.position = 'absolute';
 
     clone.addEventListener('dragstart', (evt) => {
+      currentDragShape = { shape: 'circle' };
       evt.dataTransfer.setData('circle', 'true');
       evt.dataTransfer.setData('circle-id', clone.dataset.id);
     });
@@ -1284,6 +1319,7 @@ dropZone.addEventListener('drop', (e) => {
     pointerSlot.appendChild(clone);
     layoutSlotCircles(pointerSlot);
     clearSelection();
+    currentDragShape = null;
     return;
   }
 
@@ -1343,6 +1379,7 @@ dropZone.addEventListener('drop', (e) => {
 
   
 clone.addEventListener('dragstart', (e) => {
+  currentDragShape = { shape: 'circle' };
   e.dataTransfer.setData('circle', 'true');
   e.dataTransfer.setData('circle-id', clone.dataset.id);
 });
@@ -1354,9 +1391,10 @@ clone.addEventListener('click', () => {
 
   const existingCircle = targetSlot.querySelector('.circle');
   if (existingCircle) targetSlot.removeChild(existingCircle);
-  targetSlot.appendChild(clone);
-  layoutSlotCircles(targetSlot);
-  clearSelection();
+    targetSlot.appendChild(clone);
+    layoutSlotCircles(targetSlot);
+    clearSelection();
+    currentDragShape = null;
 });
 
 //if (isMobile) {
