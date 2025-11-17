@@ -357,6 +357,7 @@
     <select id="shapeChoice">
       <option value="square">Square</option>
       <option value="sentence">Sentence</option>
+      <option value="large-circle">Large Circle</option>
       <option value="exclamation">Exclamation</option>
       <option value="question">Question</option>
       <option value="period">Period</option>
@@ -365,7 +366,6 @@
       <option value="semicolon">Semicolon</option>
       <option value="quote">Quotation Mark</option>
       <option value="apostrophe">Apostrophe</option>
-      <option value="large-circle">Large Circle</option>
     </select>
     <label for="colorChoice">Color:</label>
     <select id="colorChoice">
@@ -375,6 +375,16 @@
       <option value="green">Green</option>
       <option value="brown">Brown</option>
       <option value="turquoise">Turquoise</option>
+      <option value="orange">Orange</option>
+      <option value="yellow">Yellow</option>
+      <option value="pink">Pink</option>
+      <option value="black">Black</option>
+      <option value="gray">Gray</option>
+      <option value="cyan">Cyan</option>
+      <option value="lime">Lime</option>
+      <option value="navy">Navy</option>
+      <option value="teal">Teal</option>
+      <option value="magenta">Magenta</option>
     </select>
     <button onclick="addNewTile()">Add Tile</button>
   </div>
@@ -446,6 +456,16 @@
       brown: '#8b5e3c',
       turquoise: '#1abc9c',
       sentence: '#ffe085',
+      orange: '#f39c12',
+      yellow: '#f1c40f',
+      pink: '#ff69b4',
+      black: '#333333',
+      gray: '#95a5a6',
+      cyan: '#00bcd4',
+      lime: '#9acd32',
+      navy: '#001f3f',
+      teal: '#008080',
+      magenta: '#d81b60',
     };
     const MULTI_SLOT_SHAPES = new Set(['sentence']);
     const MARK_SHAPES = new Set([
@@ -490,14 +510,17 @@
       const circleSize = CIRCLE_SIZE;
       const gap = CIRCLE_GAP;
       if (!circles.length) return;
-      const top = (slotEl.offsetHeight - circleSize) / 2;
+      const slotHeight = slotEl.clientHeight || slotEl.offsetHeight;
+      const slotWidth = slotEl.clientWidth || slotEl.offsetWidth;
+      const top = (slotHeight - circleSize) / 2;
       if (circles.length === 1) {
-        const left = (slotEl.offsetWidth - circleSize) / 2;
+        const left = (slotWidth - circleSize) / 2;
         circles[0].style.top = `${top}px`;
         circles[0].style.left = `${left}px`;
         return;
       }
-      const firstLeft = (slotEl.offsetWidth - (2 * circleSize + gap)) / 2;
+      const totalWidth = circleSize * 2 + gap;
+      const firstLeft = (slotWidth - totalWidth) / 2;
       circles.slice(0, 2).forEach((circle, idx) => {
         circle.style.top = `${top}px`;
         circle.style.left = `${firstLeft + idx * (circleSize + gap)}px`;
@@ -634,7 +657,9 @@
         tile.style.backgroundColor = resolveTileColor(color);
         tile.style.color = 'white';
       } else {
-        tile.className = `square ${color} draggable-shape`;
+        tile.className = 'square draggable-shape';
+        tile.style.backgroundColor = resolveTileColor(color);
+        tile.style.color = 'white';
         tile.textContent = '';
         tile.dataset.text = '';
       }
