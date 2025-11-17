@@ -91,6 +91,21 @@
       border-radius: 6px;
       }
 
+    .large-circle {
+      width: var(--square-size);
+      height: var(--square-size);
+      cursor: grab;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 22px;
+      color: white;
+      font-weight: bold;
+      position: relative;
+      touch-action: none;
+      border-radius: 50%;
+    }
+
     /* L-shaped sentence token inspired by form.png */
     .sentence,
     .dropped-sentence {
@@ -262,6 +277,17 @@
       text-align: center;
     }
 
+    .dropped-large-circle {
+      width: var(--square-size);
+      height: var(--square-size);
+      border-radius: 50%;
+      justify-content: center;
+      align-items: center;
+      font-size: 22px;
+      color: white;
+      text-align: center;
+    }
+
     #colorSelector {
       display:none;
       position:absolute;
@@ -339,6 +365,7 @@
       <option value="semicolon">Semicolon</option>
       <option value="quote">Quotation Mark</option>
       <option value="apostrophe">Apostrophe</option>
+      <option value="large-circle">Large Circle</option>
     </select>
     <label for="colorChoice">Color:</label>
     <select id="colorChoice">
@@ -600,6 +627,12 @@
         tile.textContent = '';
         tile.dataset.text = '';
         tile.style.backgroundColor = resolveTileColor(tile.dataset.color);
+      } else if (shape === 'large-circle') {
+        tile.className = 'large-circle draggable-shape';
+        tile.textContent = '';
+        tile.dataset.text = '';
+        tile.style.backgroundColor = resolveTileColor(color);
+        tile.style.color = 'white';
       } else {
         tile.className = `square ${color} draggable-shape`;
         tile.textContent = '';
@@ -697,6 +730,7 @@ slot.addEventListener('click', () => {
 
   if (
     selection.type === 'square' ||
+    selection.type === 'large-circle' ||
     selection.type === 'sentence' ||
     MARK_SHAPES.has(selection.type)
   ) {
@@ -912,7 +946,11 @@ document.addEventListener('dragend', () => {
         tile.style.color = '#4d3b02';
         tile.textContent = '';
       } else {
-        tile.classList.add('dropped-square');
+        if (normalizedShape === 'large-circle') {
+          tile.classList.add('dropped-large-circle');
+        } else {
+          tile.classList.add('dropped-square');
+        }
         tile.style.backgroundColor = resolveTileColor(colorKey);
         tile.style.color = 'white';
       }
@@ -1147,6 +1185,10 @@ document.addEventListener('dragend', () => {
         ctx.lineTo(rect.width, rect.height);
         ctx.lineTo(0, rect.height);
         ctx.closePath();
+        ctx.fill();
+      } else if (element.classList.contains('large-circle') || element.classList.contains('dropped-large-circle')) {
+        ctx.beginPath();
+        ctx.arc(rect.width / 2, rect.height / 2, Math.min(rect.width, rect.height) / 2, 0, Math.PI * 2);
         ctx.fill();
       } else if (element.classList.contains('mark') || element.classList.contains('dropped-mark')) {
         const glyphEl = element.querySelector('span') || element;
