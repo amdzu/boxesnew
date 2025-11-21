@@ -622,7 +622,7 @@
       dark: TEXT_COLOR_DARK,
       light: TEXT_COLOR_LIGHT,
     };
-    const SHARE_STATE_VERSION = 2;
+    const SHARE_STATE_VERSION = 3;
     const circleTemplate = document.querySelector('.circle[data-original="true"]');
     const dropZoneWidth = (dropZones[0] && dropZones[0].clientWidth) || 1200;
     const SLOT_COUNT_PER_ZONE = Math.max(
@@ -1107,6 +1107,23 @@
       const params = new URLSearchParams(window.location.search);
       const configParam = params.get('config');
       if (!configParam) return;
+      const decodedState = decodeConfigPayload(configParam);
+      if (decodedState) {
+        if (Array.isArray(decodedState)) {
+          applyPaletteConfig(decodedState);
+          return;
+        }
+        if (decodedState && typeof decodedState === 'object') {
+          if (Array.isArray(decodedState.palette)) {
+            applyPaletteConfig(decodedState.palette);
+          }
+          if (decodedState.board) {
+            applyDropZoneConfig(decodedState.board);
+          }
+        }
+        return;
+      }
+
       try {
         const parsed = JSON.parse(configParam);
         if (Array.isArray(parsed)) {
@@ -1144,17 +1161,54 @@
       }
     }
 
+    function encodeConfigPayload(state) {
+      const json = JSON.stringify(state);
+      if (typeof window.btoa === 'function') {
+        try {
+          const base64 = window.btoa(unescape(encodeURIComponent(json)));
+          return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+        } catch (err) {
+          // Fallback to URI encoding below
+        }
+      }
+      return encodeURIComponent(json);
+    }
+
+    function decodeConfigPayload(value) {
+      if (!value || typeof value !== 'string') return null;
+      let parsed = null;
+      if (typeof window.atob === 'function') {
+        try {
+          const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+          const padLength = (4 - (normalized.length % 4)) % 4;
+          const padded = normalized + '='.repeat(padLength);
+          const json = decodeURIComponent(escape(window.atob(padded)));
+          parsed = JSON.parse(json);
+          return parsed;
+        } catch (err) {
+          // Try URI decoding below
+        }
+      }
+      try {
+        const decoded = decodeURIComponent(value);
+        parsed = JSON.parse(decoded);
+        return parsed;
+      } catch (err) {
+        return null;
+      }
+    }
+
     function buildShareUrl(state) {
-      const serialized = JSON.stringify(state);
+      const payload = encodeConfigPayload(state);
       try {
         const base = getBaseWorkspaceUrl();
         const url = new URL(base);
-        url.searchParams.set('config', serialized);
+        url.searchParams.set('config', payload);
         return url.toString();
       } catch (err) {
         const base = getBaseWorkspaceUrl();
         const glue = base.includes('?') ? '&' : '?';
-        return `${base}${glue}config=${encodeURIComponent(serialized)}`;
+        return `${base}${glue}config=${encodeURIComponent(payload)}`;
       }
     }
 
