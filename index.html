@@ -622,6 +622,34 @@
       dark: TEXT_COLOR_DARK,
       light: TEXT_COLOR_LIGHT,
     };
+    const SHARE_SHAPE_KEYS = [
+      'square',
+      'sentence',
+      'strip',
+      'large-circle',
+      'exclamation',
+      'question',
+      'period',
+      'comma',
+      'colon',
+      'semicolon',
+      'quote',
+      'apostrophe',
+    ];
+    const SHARE_SHAPE_LOOKUP = SHARE_SHAPE_KEYS.reduce((acc, key, index) => {
+      acc[key] = index;
+      return acc;
+    }, {});
+    const SHARE_COLOR_KEYS = Object.keys(TILE_COLORS);
+    const SHARE_COLOR_LOOKUP = SHARE_COLOR_KEYS.reduce((acc, key, index) => {
+      acc[key] = index;
+      return acc;
+    }, {});
+    const SHARE_TEXT_COLOR_KEYS = ['light', 'dark'];
+    const SHARE_TEXT_COLOR_LOOKUP = SHARE_TEXT_COLOR_KEYS.reduce((acc, key, index) => {
+      acc[key] = index;
+      return acc;
+    }, {});
     const SHARE_STATE_VERSION = 3;
     const circleTemplate = document.querySelector('.circle[data-original="true"]');
     const dropZoneWidth = (dropZones[0] && dropZones[0].clientWidth) || 1200;
@@ -980,6 +1008,192 @@
       document.getElementById('colorSelector').style.display = 'none';
     }
 
+    function encodeShareShape(value) {
+      if (typeof value === 'number') return value;
+      if (typeof value === 'string' && Object.prototype.hasOwnProperty.call(SHARE_SHAPE_LOOKUP, value)) {
+        return SHARE_SHAPE_LOOKUP[value];
+      }
+      return value || 'square';
+    }
+
+    function decodeShareShape(value) {
+      if (typeof value === 'number' && SHARE_SHAPE_KEYS[value]) {
+        return SHARE_SHAPE_KEYS[value];
+      }
+      if (typeof value === 'string' && value.trim() !== '') {
+        return value;
+      }
+      return 'square';
+    }
+
+    function encodeShareColor(value) {
+      if (typeof value === 'number') return value;
+      if (typeof value === 'string' && Object.prototype.hasOwnProperty.call(SHARE_COLOR_LOOKUP, value)) {
+        return SHARE_COLOR_LOOKUP[value];
+      }
+      return value || 'red';
+    }
+
+    function decodeShareColor(value) {
+      if (typeof value === 'number' && SHARE_COLOR_KEYS[value]) {
+        return SHARE_COLOR_KEYS[value];
+      }
+      if (typeof value === 'string' && value.trim() !== '') {
+        return value;
+      }
+      return 'red';
+    }
+
+    function encodeShareTextColor(value) {
+      if (typeof value === 'number') return value;
+      if (typeof value === 'string' && Object.prototype.hasOwnProperty.call(SHARE_TEXT_COLOR_LOOKUP, value)) {
+        return SHARE_TEXT_COLOR_LOOKUP[value];
+      }
+      return value || 'light';
+    }
+
+    function decodeShareTextColor(value) {
+      if (typeof value === 'number' && SHARE_TEXT_COLOR_KEYS[value]) {
+        return SHARE_TEXT_COLOR_KEYS[value];
+      }
+      if (typeof value === 'string' && value.trim() !== '') {
+        return value;
+      }
+      return 'light';
+    }
+
+    function compactPaletteEntry(tile) {
+      if (!tile || typeof tile !== 'object') return tile;
+      return [
+        encodeShareShape(tile.shape),
+        encodeShareColor(tile.color),
+        encodeShareTextColor(tile.textColor),
+        tile.span || 1,
+        tile.text || '',
+      ];
+    }
+
+    function expandPaletteEntry(entry) {
+      if (Array.isArray(entry)) {
+        const [shapeValue, colorValue, textColorValue, spanValue, textValue] = entry;
+        return {
+          shape: decodeShareShape(shapeValue),
+          color: decodeShareColor(colorValue),
+          textColor: decodeShareTextColor(textColorValue),
+          span: typeof spanValue === 'number' ? spanValue : parseInt(spanValue, 10) || 1,
+          text: typeof textValue === 'string' ? textValue : '',
+        };
+      }
+      return entry;
+    }
+
+    function compactBoardTile(tile) {
+      if (!tile || typeof tile !== 'object') return tile;
+      const slotIndex = parseInt(tile.slot, 10);
+      return [
+        Number.isNaN(slotIndex) ? tile.slot : slotIndex,
+        encodeShareShape(tile.shape),
+        encodeShareColor(tile.color),
+        encodeShareTextColor(tile.textColor),
+        tile.span || 1,
+        tile.text || '',
+      ];
+    }
+
+    function expandBoardTile(entry) {
+      if (Array.isArray(entry)) {
+        const [slotValue, shapeValue, colorValue, textColorValue, spanValue, textValue] = entry;
+        const slotIndex = parseInt(slotValue, 10);
+        return {
+          slot: Number.isNaN(slotIndex) ? 0 : slotIndex,
+          shape: decodeShareShape(shapeValue),
+          color: decodeShareColor(colorValue),
+          textColor: decodeShareTextColor(textColorValue),
+          span: typeof spanValue === 'number' ? spanValue : parseInt(spanValue, 10) || 1,
+          text: typeof textValue === 'string' ? textValue : '',
+        };
+      }
+      return entry;
+    }
+
+    function compactCircleEntry(circle) {
+      if (!circle) return circle;
+      if (typeof circle === 'number') return circle;
+      if (typeof circle === 'object' && circle.slot !== undefined) {
+        const slotIndex = parseInt(circle.slot, 10);
+        return Number.isNaN(slotIndex) ? circle.slot : slotIndex;
+      }
+      const parsed = parseInt(circle, 10);
+      return Number.isNaN(parsed) ? circle : parsed;
+    }
+
+    function expandCircleEntry(entry) {
+      const slotIndex = typeof entry === 'number' ? entry : parseInt(entry, 10);
+      if (Number.isNaN(slotIndex)) return null;
+      return { slot: slotIndex };
+    }
+
+    function compactWorkspaceState(state) {
+      if (!state || typeof state !== 'object') return state;
+      const compact = { v: state.version || SHARE_STATE_VERSION };
+      if (Array.isArray(state.palette) && state.palette.length) {
+        compact.p = state.palette.map(compactPaletteEntry);
+      }
+      if (state.board && typeof state.board === 'object') {
+        const board = {};
+        if (Array.isArray(state.board.tiles) && state.board.tiles.length) {
+          board.t = state.board.tiles.map(compactBoardTile);
+        }
+        if (Array.isArray(state.board.circles) && state.board.circles.length) {
+          board.c = state.board.circles.map(compactCircleEntry);
+        }
+        if (Object.keys(board).length) {
+          compact.b = board;
+        }
+      }
+      return compact;
+    }
+
+    function expandWorkspaceState(raw) {
+      if (Array.isArray(raw)) {
+        return {
+          version: SHARE_STATE_VERSION,
+          palette: raw.map(expandPaletteEntry),
+        };
+      }
+      if (!raw || typeof raw !== 'object') {
+        return raw;
+      }
+      if (Array.isArray(raw.palette) || raw.board) {
+        return raw;
+      }
+      const expanded = { version: raw.v || SHARE_STATE_VERSION };
+      if (Array.isArray(raw.p)) {
+        expanded.palette = raw.p.map(expandPaletteEntry);
+      }
+      if (raw.b && typeof raw.b === 'object') {
+        const board = {};
+        if (Array.isArray(raw.b.t)) {
+          board.tiles = raw.b.t.map(expandBoardTile);
+        }
+        if (Array.isArray(raw.b.c)) {
+          const entries = raw.b.c.map(expandCircleEntry).filter(Boolean);
+          if (entries.length) {
+            board.circles = entries;
+          }
+        }
+        if (Object.keys(board).length) {
+          if (!board.tiles) board.tiles = [];
+          if (!board.circles) board.circles = [];
+          expanded.board = board;
+        }
+      }
+      if (!expanded.palette) {
+        expanded.palette = [];
+      }
+      return expanded;
+    }
+
     function exportPaletteState() {
       const tiles = Array.from(topContainer.querySelectorAll('.draggable-shape'));
       return tiles.map(tile => ({
@@ -1161,38 +1375,371 @@
       }
     }
 
+    const LZ_BASE64_KEY = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+
+    function lzCompress(input, bitsPerChar, getCharFromInt) {
+      if (input == null) return '';
+      let value;
+      const context_dictionary = {};
+      const context_dictionaryToCreate = {};
+      let context_c = '';
+      let context_wc = '';
+      let context_w = '';
+      let context_enlargeIn = 2;
+      let context_dictSize = 3;
+      let context_numBits = 2;
+      let context_data = [];
+      let context_data_val = 0;
+      let context_data_position = 0;
+
+      for (let ii = 0; ii < input.length; ii++) {
+        context_c = input.charAt(ii);
+        if (!Object.prototype.hasOwnProperty.call(context_dictionary, context_c)) {
+          context_dictionary[context_c] = context_dictSize++;
+          context_dictionaryToCreate[context_c] = true;
+        }
+        context_wc = context_w + context_c;
+        if (Object.prototype.hasOwnProperty.call(context_dictionary, context_wc)) {
+          context_w = context_wc;
+        } else {
+          if (Object.prototype.hasOwnProperty.call(context_dictionaryToCreate, context_w)) {
+            if (context_w.charCodeAt(0) < 256) {
+              for (let i = 0; i < context_numBits; i++) {
+                context_data_val = (context_data_val << 1);
+                if (context_data_position === bitsPerChar - 1) {
+                  context_data_position = 0;
+                  context_data.push(getCharFromInt(context_data_val));
+                  context_data_val = 0;
+                } else {
+                  context_data_position++;
+                }
+              }
+              value = context_w.charCodeAt(0);
+              for (let i = 0; i < 8; i++) {
+                context_data_val = (context_data_val << 1) | (value & 1);
+                if (context_data_position === bitsPerChar - 1) {
+                  context_data_position = 0;
+                  context_data.push(getCharFromInt(context_data_val));
+                  context_data_val = 0;
+                } else {
+                  context_data_position++;
+                }
+                value = value >> 1;
+              }
+            } else {
+              value = 1;
+              for (let i = 0; i < context_numBits; i++) {
+                context_data_val = (context_data_val << 1) | value;
+                if (context_data_position === bitsPerChar - 1) {
+                  context_data_position = 0;
+                  context_data.push(getCharFromInt(context_data_val));
+                  context_data_val = 0;
+                } else {
+                  context_data_position++;
+                }
+                value = 0;
+              }
+              value = context_w.charCodeAt(0);
+              for (let i = 0; i < 16; i++) {
+                context_data_val = (context_data_val << 1) | (value & 1);
+                if (context_data_position === bitsPerChar - 1) {
+                  context_data_position = 0;
+                  context_data.push(getCharFromInt(context_data_val));
+                  context_data_val = 0;
+                } else {
+                  context_data_position++;
+                }
+                value = value >> 1;
+              }
+            }
+            context_enlargeIn--;
+            if (context_enlargeIn === 0) {
+              context_enlargeIn = Math.pow(2, context_numBits);
+              context_numBits++;
+            }
+            delete context_dictionaryToCreate[context_w];
+          } else {
+            value = context_dictionary[context_w];
+            for (let i = 0; i < context_numBits; i++) {
+              context_data_val = (context_data_val << 1) | (value & 1);
+              if (context_data_position === bitsPerChar - 1) {
+                context_data_position = 0;
+                context_data.push(getCharFromInt(context_data_val));
+                context_data_val = 0;
+              } else {
+                context_data_position++;
+              }
+              value = value >> 1;
+            }
+          }
+          context_enlargeIn--;
+          if (context_enlargeIn === 0) {
+            context_enlargeIn = Math.pow(2, context_numBits);
+            context_numBits++;
+          }
+          context_dictionary[context_wc] = context_dictSize++;
+          context_w = String(context_c);
+        }
+      }
+
+      if (context_w !== '') {
+        if (Object.prototype.hasOwnProperty.call(context_dictionaryToCreate, context_w)) {
+          if (context_w.charCodeAt(0) < 256) {
+            for (let i = 0; i < context_numBits; i++) {
+              context_data_val = (context_data_val << 1);
+              if (context_data_position === bitsPerChar - 1) {
+                context_data_position = 0;
+                context_data.push(getCharFromInt(context_data_val));
+                context_data_val = 0;
+              } else {
+                context_data_position++;
+              }
+            }
+            value = context_w.charCodeAt(0);
+            for (let i = 0; i < 8; i++) {
+              context_data_val = (context_data_val << 1) | (value & 1);
+              if (context_data_position === bitsPerChar - 1) {
+                context_data_position = 0;
+                context_data.push(getCharFromInt(context_data_val));
+                context_data_val = 0;
+              } else {
+                context_data_position++;
+              }
+              value = value >> 1;
+            }
+          } else {
+            value = 1;
+            for (let i = 0; i < context_numBits; i++) {
+              context_data_val = (context_data_val << 1) | value;
+              if (context_data_position === bitsPerChar - 1) {
+                context_data_position = 0;
+                context_data.push(getCharFromInt(context_data_val));
+                context_data_val = 0;
+              } else {
+                context_data_position++;
+              }
+              value = 0;
+            }
+            value = context_w.charCodeAt(0);
+            for (let i = 0; i < 16; i++) {
+              context_data_val = (context_data_val << 1) | (value & 1);
+              if (context_data_position === bitsPerChar - 1) {
+                context_data_position = 0;
+                context_data.push(getCharFromInt(context_data_val));
+                context_data_val = 0;
+              } else {
+                context_data_position++;
+              }
+              value = value >> 1;
+            }
+          }
+          context_enlargeIn--;
+          if (context_enlargeIn === 0) {
+            context_enlargeIn = Math.pow(2, context_numBits);
+            context_numBits++;
+          }
+          delete context_dictionaryToCreate[context_w];
+        } else {
+          value = context_dictionary[context_w];
+          for (let i = 0; i < context_numBits; i++) {
+            context_data_val = (context_data_val << 1) | (value & 1);
+            if (context_data_position === bitsPerChar - 1) {
+              context_data_position = 0;
+              context_data.push(getCharFromInt(context_data_val));
+              context_data_val = 0;
+            } else {
+              context_data_position++;
+            }
+            value = value >> 1;
+          }
+        }
+        context_enlargeIn--;
+        if (context_enlargeIn === 0) {
+          context_enlargeIn = Math.pow(2, context_numBits);
+          context_numBits++;
+        }
+      }
+
+      value = 2;
+      for (let i = 0; i < context_numBits; i++) {
+        context_data_val = (context_data_val << 1) | (value & 1);
+        if (context_data_position === bitsPerChar - 1) {
+          context_data_position = 0;
+          context_data.push(getCharFromInt(context_data_val));
+          context_data_val = 0;
+        } else {
+          context_data_position++;
+        }
+        value = value >> 1;
+      }
+
+      while (true) {
+        context_data_val = (context_data_val << 1);
+        if (context_data_position === bitsPerChar - 1) {
+          context_data.push(getCharFromInt(context_data_val));
+          break;
+        }
+        context_data_position++;
+      }
+      return context_data.join('');
+    }
+
+    function lzDecompress(length, resetValue, getNextValue) {
+      const dictionary = [];
+      let next;
+      let enlargeIn = 4;
+      let dictSize = 4;
+      let numBits = 3;
+      let entry = '';
+      const result = [];
+      let bits, resb, maxpower, power;
+      let c;
+      let data = { value: getNextValue(0), position: resetValue, index: 1 };
+
+      for (let i = 0; i < 3; i++) {
+        dictionary[i] = i;
+      }
+
+      const readBits = function (limit) {
+        let bitsValue = 0;
+        let powerValue = 1;
+        while (powerValue !== limit) {
+          if (data.position === 0) {
+            data.position = resetValue;
+            data.value = getNextValue(data.index++);
+          }
+          resb = data.value & data.position;
+          data.position >>= 1;
+          if (resb > 0) bitsValue |= powerValue;
+          powerValue <<= 1;
+        }
+        return bitsValue;
+      };
+
+      bits = readBits(4);
+      if (bits === 0) {
+        c = readBits(1 << 8);
+      } else if (bits === 1) {
+        c = readBits(1 << 16);
+      } else {
+        return '';
+      }
+      dictionary[3] = String.fromCharCode(c);
+      let w = String.fromCharCode(c);
+      result.push(w);
+
+      while (true) {
+        if (data.index > length) {
+          return result.join('');
+        }
+        const cc = readBits(1 << numBits);
+        let code = cc;
+        if (code === 0) {
+          dictionary[dictSize++] = String.fromCharCode(readBits(1 << 8));
+          code = dictSize - 1;
+          enlargeIn--;
+        } else if (code === 1) {
+          dictionary[dictSize++] = String.fromCharCode(readBits(1 << 16));
+          code = dictSize - 1;
+          enlargeIn--;
+        } else if (code === 2) {
+          return result.join('');
+        }
+
+        if (enlargeIn === 0) {
+          enlargeIn = Math.pow(2, numBits);
+          numBits++;
+        }
+
+        if (dictionary[code]) {
+          entry = dictionary[code];
+        } else {
+          if (code === dictSize) {
+            entry = w + w.charAt(0);
+          } else {
+            return null;
+          }
+        }
+        result.push(entry);
+
+        dictionary[dictSize++] = w + entry.charAt(0);
+        enlargeIn--;
+
+        w = entry;
+
+        if (enlargeIn === 0) {
+          enlargeIn = Math.pow(2, numBits);
+          numBits++;
+        }
+      }
+    }
+
+    function lzCompressToBase64(input) {
+      if (input == null) return '';
+      const res = lzCompress(input, 6, a => LZ_BASE64_KEY.charAt(a));
+      switch (res.length % 4) {
+        case 0:
+          return res;
+        case 1:
+          return `${res}===`;
+        case 2:
+          return `${res}==`;
+        case 3:
+          return `${res}=`;
+        default:
+          return res;
+      }
+    }
+
+    function lzDecompressFromBase64(input) {
+      if (input == null) return '';
+      if (input === '') return null;
+      const sanitized = input.replace(/[^A-Za-z0-9\+\/\=]/g, '');
+      return lzDecompress(sanitized.length, 32, index => LZ_BASE64_KEY.indexOf(sanitized.charAt(index)));
+    }
+
     function encodeConfigPayload(state) {
-      const json = JSON.stringify(state);
+      const shareReadyState = compactWorkspaceState(state);
+      const json = JSON.stringify(shareReadyState);
+      try {
+        const compressed = lzCompressToBase64(json);
+        if (compressed) {
+          return compressed.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+        }
+      } catch (err) {
+        // ignore and fallback
+      }
       if (typeof window.btoa === 'function') {
         try {
           const base64 = window.btoa(unescape(encodeURIComponent(json)));
           return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-        } catch (err) {
-          // Fallback to URI encoding below
-        }
+        } catch (err) {}
       }
       return encodeURIComponent(json);
     }
 
     function decodeConfigPayload(value) {
       if (!value || typeof value !== 'string') return null;
-      let parsed = null;
+      try {
+        const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+        const decompressed = lzDecompressFromBase64(normalized);
+        if (typeof decompressed === 'string' && decompressed.length) {
+          return expandWorkspaceState(JSON.parse(decompressed));
+        }
+      } catch (err) {}
+
       if (typeof window.atob === 'function') {
         try {
           const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
           const padLength = (4 - (normalized.length % 4)) % 4;
           const padded = normalized + '='.repeat(padLength);
           const json = decodeURIComponent(escape(window.atob(padded)));
-          parsed = JSON.parse(json);
-          return parsed;
-        } catch (err) {
-          // Try URI decoding below
-        }
+          return expandWorkspaceState(JSON.parse(json));
+        } catch (err) {}
       }
       try {
         const decoded = decodeURIComponent(value);
-        parsed = JSON.parse(decoded);
-        return parsed;
+        return expandWorkspaceState(JSON.parse(decoded));
       } catch (err) {
         return null;
       }
