@@ -18,8 +18,8 @@
     }
 
     .menu-button {
-      width: 60px;
-      height: 45px;
+      width: 120px;
+      height: 90px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -50,6 +50,17 @@
       color: #333;
       padding: 5px 0;
       cursor: pointer;
+    }
+
+    .menu-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #333;
+      padding: 6px 0;
+      font-size: 14px;
+      cursor: pointer;
+      user-select: none;
     }
 
     .edit-toolbar {
@@ -92,8 +103,11 @@
 
     :root {
       --square-size: 40px;
+      --tower-height: calc(var(--square-size) * 2);
+      --tower-text-offset: calc(var(--tower-height) - var(--square-size));
       --sentence-width: 140px;
       --sentence-height: 65px;
+      --sentence-text-offset: calc(var(--sentence-height) - var(--square-size) + 3px);
       --sentence-arm-width: 40px;
       --sentence-arm-height: 40px;
       --sentence-default-color: #2ecc71;
@@ -115,6 +129,7 @@
 
     #topContainer {
       align-items: flex-end;
+      min-height: calc(var(--tower-height) + 20px);
     }
 
     .square {
@@ -131,6 +146,47 @@
       touch-action: none;
       border-radius: 6px;
       }
+
+    .tower,
+    .dropped-tower {
+      width: var(--square-size);
+      height: var(--tower-height);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 22px;
+      color: var(--tile-text-color);
+      font-weight: bold;
+      position: relative;
+      border-radius: 6px;
+      box-sizing: border-box;
+      text-align: center;
+      padding-top: var(--tower-text-offset);
+      padding-bottom: 0;
+      line-height: var(--square-size);
+    }
+
+    .tower {
+      cursor: grab;
+      touch-action: none;
+    }
+
+    .dropped-tower {
+      cursor: move;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      z-index: 3;
+    }
+
+    .tower input,
+    .dropped-tower input {
+      height: var(--square-size);
+      line-height: var(--square-size);
+      align-self: center;
+      padding: 0 6px;
+      box-sizing: border-box;
+    }
 
     .large-circle {
       width: var(--square-size);
@@ -195,13 +251,14 @@
       font-weight: 600;
       font-size: 20px;
       padding: 8px;
-      padding-top: calc(var(--sentence-height) - var(--square-size));
+      padding-top: var(--sentence-text-offset);
       padding-bottom: 0;
       box-sizing: border-box;
       display: flex;
       align-items: center;
       justify-content: flex-start;
       text-align: left;
+      line-height: var(--square-size);
     }
 
     .sentence {
@@ -308,7 +365,7 @@
 
     .drop-zone {
       width: 1850px;
-      height: 100px;
+      height: 120px;
       margin: 0 auto;
       display: flex;
       justify-content: flex-start;
@@ -327,7 +384,7 @@
       position: relative;
       flex-shrink: 0;
       touch-action: none;
-      transform: translateY(35px);
+      transform: translateY(45px);
     }
 
     .slot.highlighted {
@@ -443,6 +500,10 @@
         <button type="button" class="text-color-btn" data-text-color="dark">Deep brown</button>
         <button type="button" class="text-color-btn" data-text-color="light">Light chalk</button>
       </div>
+      <label class="menu-toggle">
+        <input type="checkbox" id="singleUseToggle">
+        Single-use palette
+      </label>
     </div>
   </div>
 
@@ -451,6 +512,7 @@
     <label for="shapeChoice">Tile Type:</label>
     <select id="shapeChoice">
       <option value="square">Square</option>
+      <option value="tower">Tower</option>
       <option value="sentence">Sentence</option>
       <option value="strip">Rectangle Strip</option>
       <option value="large-circle">Large Circle</option>
@@ -553,12 +615,14 @@
     let editMode = false;
     let currentDragShape = null;
     let focusedEditableTile = null;
+    let singleUseMode = false;
     const dropZone = document.getElementById('dropZoneStack');
     const dropZones = Array.from(dropZone.querySelectorAll('.drop-zone'));
     const topContainer = document.getElementById('topContainer');
     const dropSound = document.getElementById('dropSound');
     const deleteSound = document.getElementById('deleteSound');
     const editToolbar = document.getElementById('editToolbar');
+    const singleUseToggle = document.getElementById('singleUseToggle');
     const shareLinkButton = document.getElementById('shareLinkButton');
     const clearLinkButton = document.getElementById('clearLinkButton');
     const textColorButtons = editToolbar
@@ -635,6 +699,7 @@
       'semicolon',
       'quote',
       'apostrophe',
+      'tower',
     ];
     const SHARE_SHAPE_LOOKUP = SHARE_SHAPE_KEYS.reduce((acc, key, index) => {
       acc[key] = index;
@@ -805,6 +870,9 @@
 
     function registerDraggableShape(element) {
       element.classList.add('draggable-shape');
+      if (!element.dataset.paletteId) {
+        element.dataset.paletteId = 'palette-' + Math.random().toString(36).substr(2, 9);
+      }
       const shapeType = element.dataset.shape || 'square';
       element.dataset.shape = shapeType;
       const baseSpan = resolveShapeSpan(shapeType, element.dataset.span || 1);
@@ -824,6 +892,8 @@
           text: element.dataset.text || element.textContent || '',
           textColor: element.dataset.textColor || 'light',
           span: parseInt(element.dataset.span || '1', 10) || 1,
+          sourceEl: element,
+          paletteId: element.dataset.paletteId || '',
         };
 
         document.querySelectorAll('#topContainer .draggable-shape').forEach(sq => sq.classList.remove('selected'));
@@ -851,7 +921,12 @@
         const text = element.dataset.text || element.textContent || '';
         const span = parseInt(element.dataset.span || '1', 10) || 1;
         const textColor = element.dataset.textColor || 'light';
-        currentDragShape = { shape: shapeType, span, textColor };
+        currentDragShape = {
+          shape: shapeType,
+          span,
+          textColor,
+          paletteId: element.dataset.paletteId || '',
+        };
         applyDragPreview(element, e);
         e.dataTransfer.setData('color', element.dataset.color || '');
         e.dataTransfer.setData('text', text);
@@ -859,6 +934,7 @@
         e.dataTransfer.setData('span', span.toString());
         e.dataTransfer.setData('text-color', textColor);
         e.dataTransfer.setData('source-slot', '');
+        e.dataTransfer.setData('palette-id', element.dataset.paletteId || '');
       });
     }
 
@@ -899,6 +975,11 @@
         tile.style.backgroundColor = resolveTileColor(color);
       } else if (shape === 'large-circle') {
         tile.className = 'large-circle draggable-shape';
+        tile.textContent = textValue;
+        tile.dataset.text = textValue;
+        tile.style.backgroundColor = resolveTileColor(color);
+      } else if (shape === 'tower') {
+        tile.className = 'tower draggable-shape';
         tile.textContent = textValue;
         tile.dataset.text = textValue;
         tile.style.backgroundColor = resolveTileColor(color);
@@ -946,6 +1027,14 @@
       clearLinkButton.addEventListener('click', (e) => {
         e.preventDefault();
         clearWorkspaceLink();
+      });
+    }
+
+    if (singleUseToggle) {
+      singleUseMode = singleUseToggle.checked;
+      singleUseToggle.addEventListener('change', () => {
+        singleUseMode = singleUseToggle.checked;
+        clearSelection();
       });
     }
 
@@ -1871,6 +1960,7 @@
     (currentDragShape && currentDragShape.textColor) ||
     'light';
   const sourceSlot = e.dataTransfer.getData('source-slot');
+  const paletteId = e.dataTransfer.getData('palette-id') || (currentDragShape && currentDragShape.paletteId) || '';
 
   if (sourceSlot !== '') {
     const sourceSlotEl = document.querySelector(`.slot[data-index="${sourceSlot}"]`);
@@ -1883,6 +1973,10 @@
   const slotIndexValue = parseInt(slot.dataset.index, 10);
   if (placeTileAtIndex(slotIndexValue, shapeType, color, text, textColor, span)) {
     dropSound.play();
+    if (singleUseMode && paletteId) {
+      removePaletteTileById(paletteId);
+      clearSelection();
+    }
   }
 
   clearSlotHighlights();
@@ -1898,6 +1992,7 @@
 
   if (
     selection.type === 'square' ||
+    selection.type === 'tower' ||
     selection.type === 'large-circle' ||
     selection.type === 'sentence' ||
     selection.type === 'strip' ||
@@ -1912,6 +2007,9 @@
       selection.span
     )) {
       dropSound.play();
+      if (singleUseMode && selection.sourceEl && selection.sourceEl.parentElement === topContainer) {
+        removePaletteTileById(selection.paletteId || selection.sourceEl.dataset.paletteId || '');
+      }
       clearSelection();
     }
     return;
@@ -2157,12 +2255,14 @@ document.addEventListener('dragend', () => {
           applyStripDimensions(tile, resolvedSpan);
         }
         tile.style.backgroundColor = resolveTileColor(colorKey);
+      } else if (normalizedShape === 'large-circle') {
+        tile.classList.add('dropped-large-circle');
+        tile.style.backgroundColor = resolveTileColor(colorKey);
+      } else if (normalizedShape === 'tower') {
+        tile.classList.add('dropped-tower');
+        tile.style.backgroundColor = resolveTileColor(colorKey);
       } else {
-        if (normalizedShape === 'large-circle') {
-          tile.classList.add('dropped-large-circle');
-        } else {
-          tile.classList.add('dropped-square');
-        }
+        tile.classList.add('dropped-square');
         tile.style.backgroundColor = resolveTileColor(colorKey);
       }
 
@@ -2211,7 +2311,7 @@ document.addEventListener('dragend', () => {
         for (let i = 0; i < span; i++) {
           layoutSlotCircles(slots[slotIndex + i]);
         }
-      } else if (shapeType === 'square' || MARK_SHAPES.has(shapeType)) {
+      } else {
         layoutSlotCircles(baseSlot);
       }
       return true;
@@ -2257,6 +2357,14 @@ document.addEventListener('dragend', () => {
       clearSlotOccupancy(startIndex, span, tileId);
       tile.parentElement.removeChild(tile);
       if (playSound) deleteSound.play();
+    }
+
+    function removePaletteTileById(paletteId) {
+      if (!paletteId) return;
+      const paletteTile = topContainer.querySelector(`.draggable-shape[data-palette-id='${paletteId}']`);
+      if (paletteTile) {
+        paletteTile.remove();
+      }
     }
 
     function generateTileId() {
@@ -2461,7 +2569,16 @@ document.addEventListener('dragend', () => {
         ctx.font = `${styles.fontWeight} ${styles.fontSize} ${styles.fontFamily}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(text, rect.width / 2, rect.height / 2, rect.width - 10);
+        const isTower =
+          (element.dataset && element.dataset.shape === 'tower') ||
+          element.classList.contains('tower') ||
+          element.classList.contains('dropped-tower');
+        const isSentence =
+          (element.dataset && element.dataset.shape === 'sentence') ||
+          element.classList.contains('sentence') ||
+          element.classList.contains('dropped-sentence');
+        const textY = isTower || isSentence ? rect.height - BASE_TILE_SIZE / 2 : rect.height / 2;
+        ctx.fillText(text, rect.width / 2, textY, rect.width - 10);
       }
 
       const offsetX = event.clientX - rect.left;
