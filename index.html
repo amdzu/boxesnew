@@ -63,6 +63,22 @@
       user-select: none;
     }
 
+    .menu-inline {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      padding: 6px 0;
+      flex-wrap: wrap;
+    }
+
+    .menu-inline input {
+      padding: 4px 6px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      min-width: 140px;
+      font-size: 13px;
+    }
+
     .edit-toolbar {
       display: none;
       margin-top: 8px;
@@ -542,6 +558,10 @@
       <a href="#" id="addPictureButton">Add Picture</a>
       <a href="#" id="clearLinkButton">Clear</a>
       <a href="#" id="shareLinkButton">Share</a>
+      <div class="menu-inline">
+        <input type="text" id="serverImageName" placeholder="filename.png">
+        <button type="button" id="addServerImageButton">Add server image</button>
+      </div>
       <div class="edit-toolbar" id="editToolbar">
         <span>Text color:</span>
         <button type="button" class="text-color-btn" data-text-color="dark">Deep brown</button>
@@ -681,6 +701,8 @@
     const formLengthSelect = document.getElementById('formLength');
     const addPictureButton = document.getElementById('addPictureButton');
     const imagePickerEl = document.getElementById('imagePicker');
+    const serverImageInput = document.getElementById('serverImageName');
+    const addServerImageButton = document.getElementById('addServerImageButton');
     const TILE_COLORS = {
       red: '#d7263d',
       blue: '#276bd7',
@@ -1139,6 +1161,40 @@
       });
     }
 
+    function addServerImage(path) {
+      if (!path) return;
+      const trimmed = path.trim();
+      if (!trimmed) return;
+      const img = new Image();
+      img.onload = () => {
+        const aspect = img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1;
+        createTopTile({
+          shape: 'image',
+          imageSrc: trimmed,
+          aspectRatio: aspect,
+          text: '',
+          textColor: 'light',
+        });
+      };
+      img.onerror = () => {
+        console.warn(`Could not load image at ${trimmed}`);
+      };
+      img.src = trimmed;
+    }
+
+    if (addServerImageButton && serverImageInput) {
+      addServerImageButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        addServerImage(serverImageInput.value);
+      });
+      serverImageInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addServerImage(serverImageInput.value);
+        }
+      });
+    }
+
     if (shareLinkButton) {
       shareLinkButton.addEventListener('click', (e) => {
         e.preventDefault();
@@ -1276,24 +1332,41 @@
 
     function compactPaletteEntry(tile) {
       if (!tile || typeof tile !== 'object') return tile;
-      return [
+      const base = [
         encodeShareShape(tile.shape),
         encodeShareColor(tile.color),
         encodeShareTextColor(tile.textColor),
         tile.span || 1,
         tile.text || '',
       ];
+      const imageSrc = tile.imageSrc || '';
+      const imageAspect = tile.imageAspect || tile.aspectRatio || '';
+      if (imageSrc || imageAspect) {
+        base.push(imageSrc, imageAspect);
+      }
+      return base;
     }
 
     function expandPaletteEntry(entry) {
       if (Array.isArray(entry)) {
-        const [shapeValue, colorValue, textColorValue, spanValue, textValue] = entry;
+        const [
+          shapeValue,
+          colorValue,
+          textColorValue,
+          spanValue,
+          textValue,
+          imageSrc,
+          imageAspect,
+        ] = entry;
         return {
           shape: decodeShareShape(shapeValue),
           color: decodeShareColor(colorValue),
           textColor: decodeShareTextColor(textColorValue),
           span: typeof spanValue === 'number' ? spanValue : parseInt(spanValue, 10) || 1,
           text: typeof textValue === 'string' ? textValue : '',
+          imageSrc: typeof imageSrc === 'string' ? imageSrc : '',
+          imageAspect:
+            typeof imageAspect === 'number' || typeof imageAspect === 'string' ? imageAspect : '',
         };
       }
       return entry;
@@ -1302,7 +1375,7 @@
     function compactBoardTile(tile) {
       if (!tile || typeof tile !== 'object') return tile;
       const slotIndex = parseInt(tile.slot, 10);
-      return [
+      const base = [
         Number.isNaN(slotIndex) ? tile.slot : slotIndex,
         encodeShareShape(tile.shape),
         encodeShareColor(tile.color),
@@ -1310,11 +1383,26 @@
         tile.span || 1,
         tile.text || '',
       ];
+      const imageSrc = tile.imageSrc || '';
+      const imageAspect = tile.imageAspect || tile.aspectRatio || '';
+      if (imageSrc || imageAspect) {
+        base.push(imageSrc, imageAspect);
+      }
+      return base;
     }
 
     function expandBoardTile(entry) {
       if (Array.isArray(entry)) {
-        const [slotValue, shapeValue, colorValue, textColorValue, spanValue, textValue] = entry;
+        const [
+          slotValue,
+          shapeValue,
+          colorValue,
+          textColorValue,
+          spanValue,
+          textValue,
+          imageSrc,
+          imageAspect,
+        ] = entry;
         const slotIndex = parseInt(slotValue, 10);
         return {
           slot: Number.isNaN(slotIndex) ? 0 : slotIndex,
@@ -1323,6 +1411,9 @@
           textColor: decodeShareTextColor(textColorValue),
           span: typeof spanValue === 'number' ? spanValue : parseInt(spanValue, 10) || 1,
           text: typeof textValue === 'string' ? textValue : '',
+          imageSrc: typeof imageSrc === 'string' ? imageSrc : '',
+          imageAspect:
+            typeof imageAspect === 'number' || typeof imageAspect === 'string' ? imageAspect : '',
         };
       }
       return entry;
